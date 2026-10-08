@@ -2,21 +2,24 @@ import { useParams, Link, useLoaderData } from "react-router";
 import { CommandPalette } from "../components/CommandPalette";
 
 export async function loader({ params, context }: any) {
-  // 🔥 终极修正：直接从 context.env 拿变量
-  const bucket = context.env.BLOG_BUCKET;
-  
-  if (!bucket) {
-    throw new Error("R2 桶未绑定，请检查环境");
-  }
+  try {
+    const env = context.env || context.cloudflare?.env || {};
+    const bucket = env.BLOG_BUCKET;
+    
+    if (!bucket) {
+      return { _debugError: "❌ R2 桶环境变量丢失！当前环境中只有: " + Object.keys(env).join(", ") };
+    }
 
-  const object = await bucket.get(`${params.slug}.json`);
-  
-  if (!object) {
-    throw new Response("文章未找到", { status: 404 });
-  }
+    const object = await bucket.get(`${params.slug}.json`);
+    if (!object) {
+      return { _debugError: `❌ R2 桶连接成功，但找不到文件: ${params.slug}.json` };
+    }
 
-  const rawText = await object.text();
-  return JSON.parse(rawText);
+    const rawText = await object.text();
+    return JSON.parse(rawText);
+  } catch (error: any) {
+    return { _debugError: `❌ 抽水机内部破裂: ${error.message}` };
+  }
 }
 
 function renderBlock(block: any) {
@@ -31,6 +34,18 @@ function renderBlock(block: any) {
 export default function PostReader() {
   const { slug } = useParams(); 
   const post = useLoaderData<any>(); 
+
+  // 数据层报错拦截渲染
+  if (post?._debugError) {
+    return (
+      <div style={{ padding: '5rem 2rem', maxWidth: '800px', margin: '0 auto', fontFamily: 'monospace' }}>
+        <h2 style={{ color: '#dc2626' }}>数据层诊断报告</h2>
+        <div style={{ background: '#fee2e2', color: '#991b1b', padding: '1.5rem', borderRadius: '8px' }}>
+          {post._debugError}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
