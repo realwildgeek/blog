@@ -2,18 +2,17 @@ import { useParams, Link, useLoaderData } from "react-router";
 import { CommandPalette } from "../components/CommandPalette";
 
 export async function loader({ params }: any) {
-  // 🔥 终极抽水机：无视框架，直接向 V8 引擎要数据
   const env = (globalThis as any).CF_ENV;
   const bucket = env?.BLOG_BUCKET;
   
   if (!bucket) {
-    throw new Response("R2 桶未绑定，请检查环境配置", { status: 500 });
+    throw new Response("R2 Storage not bound", { status: 500 });
   }
 
   const object = await bucket.get(`${params.slug}.json`);
   
   if (!object) {
-    throw new Response("文章未找到", { status: 404 });
+    throw new Response("Post not found", { status: 404 });
   }
 
   const rawText = await object.text();

@@ -7,7 +7,6 @@ export default defineConfig({
     tailwindcss(), 
     reactRouter()
   ],
-  // 🔥 极其关键：强行锁定构建目标为 Web Worker 边缘环境，防止 Node.js 污染
   ssr: {
     target: "webworker",
     resolve: {
