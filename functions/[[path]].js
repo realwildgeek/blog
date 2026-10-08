@@ -3,10 +3,6 @@ import * as build from "../build/server/index.js";
 
 export const onRequest = createPagesFunctionHandler({
   build,
-  getLoadContext: (context) => {
-    return {
-      env: context.env,
-      cloudflare: { env: context.env } // 双保险挂载
-    };
-  }
+  // 🔥 核心反制：强制开启开发模式，让框架把真实错误直接打印在网页上
+  mode: "development",
 });
