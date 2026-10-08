@@ -2,23 +2,41 @@ import { useParams, Link, useLoaderData } from "react-router";
 import { CommandPalette } from "../components/CommandPalette";
 
 export async function loader({ params, context }: any) {
-  // 🔥 v8 核心修复：通过 .get("env") 方法从 provider 实例中提取变量
-  const env = context.get("env");
-  const bucket = env?.BLOG_BUCKET;
-  
-  if (!bucket) {
-    throw new Response("R2 桶未绑定，请检查环境变量配置", { status: 500 });
-  }
+  try {
+    // 全方位探测环境变量的位置 (兼容 v7 和 v8 的各种挂载方式)
+    let env = null;
+    let envSource = "";
 
-  const object = await bucket.get(`${params.slug}.json`);
-  
-  if (!object) {
-    throw new Response("文章未找到", { status: 404 });
-  }
+    if (context?.get && typeof context.get === 'function') {
+      env = context.get("env");
+      envSource = "context.get('env')";
+    } else if (context?.env) {
+      env = context.env;
+      envSource = "context.env";
+    } else if (context?.cloudflare?.env) {
+      env = context.cloudflare.env;
+      envSource = "context.cloudflare.env";
+    }
 
-  // 纯净的数据解析
-  const rawText = await object.text();
-  return JSON.parse(rawText);
+    if (!env || !env.BLOG_BUCKET) {
+      return { 
+        _debugError: `❌ 找不到 BLOG_BUCKET！\n探索路径: ${envSource || '无'}\nContext 拥有的顶层键名: ${Object.keys(context || {}).join(', ')}`
+      };
+    }
+
+    const bucket = env.BLOG_BUCKET;
+    const object = await bucket.get(`${params.slug}.json`);
+    
+    if (!object) {
+      return { _debugError: `❌ 环境变量正常，但 R2 桶里找不到名为 [ ${params.slug}.json ] 的文件。` };
+    }
+
+    const rawText = await object.text();
+    return JSON.parse(rawText);
+
+  } catch (error: any) {
+    return { _debugError: `❌ 代码执行崩溃: ${error.message}\n${error.stack}` };
+  }
 }
 
 function renderBlock(block: any) {
@@ -33,6 +51,19 @@ function renderBlock(block: any) {
 export default function PostReader() {
   const { slug } = useParams(); 
   const post = useLoaderData<any>(); 
+
+  // 如果捕获到错误，直接在页面上输出红色诊断报告，绕过 ErrorBoundary 的掩盖
+  if (post?._debugError) {
+    return (
+      <div style={{ padding: '5rem 2rem', maxWidth: '800px', margin: '0 auto', fontFamily: 'monospace' }}>
+        <h2 style={{ color: '#dc2626' }}>数据层精确诊断</h2>
+        <pre style={{ background: '#fee2e2', color: '#991b1b', padding: '1.5rem', borderRadius: '8px', whiteSpace: 'pre-wrap' }}>
+          {post._debugError}
+        </pre>
+        <Link to="/" style={{ display: 'inline-block', marginTop: '2rem', color: '#666' }}>← 返回首页</Link>
+      </div>
+    );
+  }
 
   return (
     <>
