@@ -1,0 +1,187 @@
+/* 默认：浅色模式 (Light) */
+:root {
+  --bg-base: #FFFFFF;
+  --bg-surface: #F9FAFB;
+  --text-main: #111827;
+  --text-muted: #6B7280;
+  --border-subtle: #E5E7EB;
+  --font-family: 'Inter', sans-serif;
+  --radius-card: 12px;
+}
+
+/* 深色模式 (Dark) */
+[data-theme="dark"] {
+  --bg-base: #0F0F0F;
+  --bg-surface: #1A1A1A;
+  --text-main: #E5E5E5;
+  --text-muted: #A3A3A3;
+  --border-subtle: #333333;
+}
+
+/* 阅读模式 (Reading) - 护眼羊皮纸质感 */
+[data-theme="reading"] {
+  --bg-base: #FDF6E3;           
+  --bg-surface: #F5E6C4;
+  --text-main: #4A4A4A;
+  --text-muted: #8A8A8A;
+  --border-subtle: #EADCB6;
+  --font-family: 'Serif', 'Georgia', serif;
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-main);
+  font-family: var(--font-family);
+  transition: background-color 0.3s ease, color 0.3s ease;
+  margin: 0;
+  padding: 0;
+}
+
+/* 居中且限制最大宽度的阅读容器 */
+.app-container {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 6rem 2rem;
+}
+
+/* 博客顶部的极简头部 */
+.header-area {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4rem;
+}
+
+/* --- 卡片样式升级 --- */
+.post-card {
+  display: block;
+  padding: 1.5rem; /* 增加内边距 */
+  margin-bottom: 1.5rem; /* 卡片之间的间距 */
+  background-color: var(--bg-surface); /* 使用表面背景色，与底色区分 */
+  border-radius: var(--radius-card); /* 圆角 */
+  border: 1px solid var(--border-subtle);
+  text-decoration: none;
+  transition: all 0.3s ease;
+}
+
+.post-card:hover {
+  transform: translateY(-2px); /* 悬浮时轻微上浮 */
+  border-color: var(--text-muted); /* 边框颜色加深反馈 */
+}
+
+.post-date {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  margin-bottom: 0.4rem;
+  font-family: monospace; /* 日期使用等宽字体增加极客感 */
+}
+
+.post-title {
+  color: var(--text-main);
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 500;
+}
+
+/* --- 全局命令面板 (Ctrl+K / Cmd+K) --- */
+.cmd-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px); /* 苹果风格的毛玻璃背景 */
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 15vh;
+  z-index: 9999;
+}
+
+.cmd-palette {
+  background: var(--bg-base);
+  width: 100%;
+  max-width: 600px;
+  border-radius: 16px;
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+  overflow: hidden;
+}
+
+.cmd-input {
+  width: 100%;
+  padding: 1.5rem;
+  font-size: 1.25rem;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-main);
+  outline: none;
+}
+
+.cmd-list {
+  padding: 0.5rem;
+  list-style: none;
+  margin: 0;
+}
+
+.cmd-item {
+  padding: 1rem 1.5rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.cmd-item:hover {
+  background: var(--bg-surface);
+  color: var(--text-main);
+}
+
+/* --- 正文阅读器样式 --- */
+.reader-container {
+  max-width: 650px; /* 比首页稍微收窄，提供完美的单行阅读字数（约65-75个字符） */
+  margin: 0 auto;
+  padding: 8rem 2rem 10rem 2rem; /* 顶部留白，底部留出大量无限滚动的呼吸空间 */
+}
+
+/* 标题骨架 */
+.reader-header {
+  margin-bottom: 4rem;
+}
+
+.reader-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0 0 1rem 0;
+  color: var(--text-main);
+  letter-spacing: -0.02em; /* 大标题稍微收紧字间距，显得更高级 */
+}
+
+.reader-meta {
+  font-family: monospace;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+/* AST 映射元素的排版 */
+.ast-paragraph {
+  font-size: 1.125rem;
+  line-height: 1.8;
+  color: var(--text-main);
+  margin-bottom: 1.8rem; /* 段落间保持足够的呼吸感 */
+}
+
+.ast-heading-2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-main);
+  margin: 3rem 0 1.5rem 0;
+}
+
+.ast-quote {
+  border-left: 3px solid var(--border-subtle);
+  padding-left: 1.5rem;
+  margin: 2rem 0;
+  color: var(--text-muted);
+  font-style: italic;
+}
