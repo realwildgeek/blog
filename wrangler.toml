@@ -1,0 +1,11 @@
+name = "blog"
+compatibility_date = "2024-04-01"
+
+# 完美解决刚才报错中缺少的 fs、stream 等 Node 内置模块问题
+compatibility_flags = ["nodejs_compat"] 
+pages_build_output_dir = "build/client"
+
+# 你的 R2 数据库专线
+[[r2_buckets]]
+binding = "BLOG_BUCKET"
+bucket_name = "你的真实R2桶名字"  # 请替换为你后台建好的桶名
