@@ -3,39 +3,25 @@ import { CommandPalette } from "../components/CommandPalette";
 
 export async function loader({ params, context }: any) {
   try {
-    // 全方位探测环境变量的位置 (兼容 v7 和 v8 的各种挂载方式)
-    let env = null;
-    let envSource = "";
-
-    if (context?.get && typeof context.get === 'function') {
-      env = context.get("env");
-      envSource = "context.get('env')";
-    } else if (context?.env) {
-      env = context.env;
-      envSource = "context.env";
-    } else if (context?.cloudflare?.env) {
-      env = context.cloudflare.env;
-      envSource = "context.cloudflare.env";
-    }
-
+    // 毫无悬念地从 provider 中取出我们用闭包强行塞进来的 env
+    const env = context.get("env");
+    
     if (!env || !env.BLOG_BUCKET) {
-      return { 
-        _debugError: `❌ 找不到 BLOG_BUCKET！\n探索路径: ${envSource || '无'}\nContext 拥有的顶层键名: ${Object.keys(context || {}).join(', ')}`
-      };
+      return { _debugError: "❌ 如果你看到这条，说明宇宙物理学不存在了。" };
     }
 
     const bucket = env.BLOG_BUCKET;
     const object = await bucket.get(`${params.slug}.json`);
     
     if (!object) {
-      return { _debugError: `❌ 环境变量正常，但 R2 桶里找不到名为 [ ${params.slug}.json ] 的文件。` };
+      return { _debugError: `❌ 管道全通！但你的 R2 桶里确实没有 [ ${params.slug}.json ] 这个文件。` };
     }
 
     const rawText = await object.text();
     return JSON.parse(rawText);
 
   } catch (error: any) {
-    return { _debugError: `❌ 代码执行崩溃: ${error.message}\n${error.stack}` };
+    return { _debugError: `❌ 数据解析异常: ${error.message}` };
   }
 }
 
@@ -52,12 +38,11 @@ export default function PostReader() {
   const { slug } = useParams(); 
   const post = useLoaderData<any>(); 
 
-  // 如果捕获到错误，直接在页面上输出红色诊断报告，绕过 ErrorBoundary 的掩盖
   if (post?._debugError) {
     return (
       <div style={{ padding: '5rem 2rem', maxWidth: '800px', margin: '0 auto', fontFamily: 'monospace' }}>
-        <h2 style={{ color: '#dc2626' }}>数据层精确诊断</h2>
-        <pre style={{ background: '#fee2e2', color: '#991b1b', padding: '1.5rem', borderRadius: '8px', whiteSpace: 'pre-wrap' }}>
+        <h2 style={{ color: '#dc2626' }}>管道已通，数据状态异常：</h2>
+        <pre style={{ background: '#fee2e2', color: '#991b1b', padding: '1.5rem', borderRadius: '8px' }}>
           {post._debugError}
         </pre>
         <Link to="/" style={{ display: 'inline-block', marginTop: '2rem', color: '#666' }}>← 返回首页</Link>
