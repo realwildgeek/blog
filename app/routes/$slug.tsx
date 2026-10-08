@@ -2,25 +2,53 @@ import { useParams, Link, useLoaderData } from "react-router";
 import { CommandPalette } from "../components/CommandPalette";
 
 export async function loader({ params, context }: any) {
-  // 不再盲猜层级，直接把 v8 传进来的 context 键值全部返回给前端
-  return { 
-    slug: params.slug,
-    contextKeys: Object.keys(context || {}),
-    cloudflareKeys: context?.cloudflare ? Object.keys(context.cloudflare) : "无 cloudflare 属性"
-  };
+  // 🔥 v8 核心修复：通过 .get("env") 方法从 provider 实例中提取变量
+  const env = context.get("env");
+  const bucket = env?.BLOG_BUCKET;
+  
+  if (!bucket) {
+    throw new Response("R2 桶未绑定，请检查环境变量配置", { status: 500 });
+  }
+
+  const object = await bucket.get(`${params.slug}.json`);
+  
+  if (!object) {
+    throw new Response("文章未找到", { status: 404 });
+  }
+
+  // 纯净的数据解析
+  const rawText = await object.text();
+  return JSON.parse(rawText);
+}
+
+function renderBlock(block: any) {
+  switch (block.type) {
+    case "paragraph": return <p key={block.id} className="ast-paragraph">{block.content}</p>;
+    case "heading": return <h2 key={block.id} className="ast-heading-2">{block.content}</h2>;
+    case "quote": return <blockquote key={block.id} className="ast-quote">{block.content}</blockquote>;
+    default: return <div key={block.id} style={{ color: 'red' }}>[未知区块]</div>;
+  }
 }
 
 export default function PostReader() {
   const { slug } = useParams(); 
-  const data = useLoaderData<any>(); 
+  const post = useLoaderData<any>(); 
 
   return (
-    <div style={{ padding: '2rem', fontFamily: 'monospace' }}>
-      <h2>环境对象探勘结果：</h2>
-      <pre style={{ background: '#f4f4f4', padding: '1rem' }}>
-        {JSON.stringify(data, null, 2)}
-      </pre>
-      <Link to="/">← 返回首页</Link>
-    </div>
+    <>
+      <CommandPalette />
+      <div className="reader-container">
+        <Link to="/" style={{ display: 'inline-block', marginBottom: '3rem', color: 'var(--text-muted)', textDecoration: 'none', fontFamily: 'monospace' }}>
+          ← Back
+        </Link>
+        <header className="reader-header">
+          <h1 className="reader-title">{post.metadata?.title || "无标题"}</h1>
+          <div className="reader-meta">{post.metadata?.date || "未知日期"} / {slug}</div>
+        </header>
+        <article className="reader-body">
+          {post.blocks?.map((block: any) => renderBlock(block))}
+        </article>
+      </div>
+    </>
   );
 }
