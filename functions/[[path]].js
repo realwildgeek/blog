@@ -1,8 +1,16 @@
-// functions/[[path]].js
 import { createPagesFunctionHandler } from "@react-router/cloudflare";
-
-// 引入 Vite 帮你打包好的纯后端产物
 import * as build from "../build/server/index.js";
 
-// 把请求接管权正式移交给 React Router 引擎
-export const onRequest = createPagesFunctionHandler({ build });
+export const onRequest = createPagesFunctionHandler({
+  build,
+  // 👇 新增这个神圣的摆渡函数：把 Cloudflare 的底层环境变量，完整注入到你的代码 context 里
+  getLoadContext: (context) => {
+    return {
+      cloudflare: {
+        env: context.env,
+        cf: context.cf,
+        ctx: context.waitUntil
+      }
+    };
+  }
+});
