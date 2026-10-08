@@ -2,14 +2,19 @@ import { useParams, Link, useLoaderData } from "react-router";
 import { CommandPalette } from "../components/CommandPalette";
 
 export async function loader({ params, context }: any) {
-  const bucket = context.cloudflare.env.BLOG_BUCKET;
+  // 🔥 终极修正：直接从 context.env 拿变量
+  const bucket = context.env.BLOG_BUCKET;
+  
+  if (!bucket) {
+    throw new Error("R2 桶未绑定，请检查环境");
+  }
+
   const object = await bucket.get(`${params.slug}.json`);
   
   if (!object) {
     throw new Response("文章未找到", { status: 404 });
   }
 
-  // 稳妥拉取：先读纯文本，再强转 JSON
   const rawText = await object.text();
   return JSON.parse(rawText);
 }
