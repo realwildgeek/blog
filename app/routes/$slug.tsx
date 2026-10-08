@@ -1,28 +1,23 @@
 import { useParams, Link, useLoaderData } from "react-router";
 import { CommandPalette } from "../components/CommandPalette";
 
-export async function loader({ params, context }: any) {
-  try {
-    // 毫无悬念地从 provider 中取出我们用闭包强行塞进来的 env
-    const env = context.get("env");
-    
-    if (!env || !env.BLOG_BUCKET) {
-      return { _debugError: "❌ 如果你看到这条，说明宇宙物理学不存在了。" };
-    }
-
-    const bucket = env.BLOG_BUCKET;
-    const object = await bucket.get(`${params.slug}.json`);
-    
-    if (!object) {
-      return { _debugError: `❌ 管道全通！但你的 R2 桶里确实没有 [ ${params.slug}.json ] 这个文件。` };
-    }
-
-    const rawText = await object.text();
-    return JSON.parse(rawText);
-
-  } catch (error: any) {
-    return { _debugError: `❌ 数据解析异常: ${error.message}` };
+export async function loader({ params }: any) {
+  // 🔥 终极抽水机：无视框架，直接向 V8 引擎要数据
+  const env = (globalThis as any).CF_ENV;
+  const bucket = env?.BLOG_BUCKET;
+  
+  if (!bucket) {
+    throw new Response("R2 桶未绑定，请检查环境配置", { status: 500 });
   }
+
+  const object = await bucket.get(`${params.slug}.json`);
+  
+  if (!object) {
+    throw new Response("文章未找到", { status: 404 });
+  }
+
+  const rawText = await object.text();
+  return JSON.parse(rawText);
 }
 
 function renderBlock(block: any) {
@@ -37,18 +32,6 @@ function renderBlock(block: any) {
 export default function PostReader() {
   const { slug } = useParams(); 
   const post = useLoaderData<any>(); 
-
-  if (post?._debugError) {
-    return (
-      <div style={{ padding: '5rem 2rem', maxWidth: '800px', margin: '0 auto', fontFamily: 'monospace' }}>
-        <h2 style={{ color: '#dc2626' }}>管道已通，数据状态异常：</h2>
-        <pre style={{ background: '#fee2e2', color: '#991b1b', padding: '1.5rem', borderRadius: '8px' }}>
-          {post._debugError}
-        </pre>
-        <Link to="/" style={{ display: 'inline-block', marginTop: '2rem', color: '#666' }}>← 返回首页</Link>
-      </div>
-    );
-  }
 
   return (
     <>
