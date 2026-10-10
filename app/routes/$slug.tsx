@@ -1,52 +1,29 @@
 import { useParams, Link, useLoaderData } from "react-router";
 import { CommandPalette } from "../components/CommandPalette";
+// 引入我们的“处理中心 C”
+import { universalTransformer } from "../adapters/index";
 
 export async function loader({ params }: any) {
   const env = (globalThis as any).CF_ENV;
   const bucket = env?.BLOG_BUCKET;
   
-  if (!bucket) {
-    throw new Response("R2 Storage not bound", { status: 500 });
-  }
+  if (!bucket) throw new Response("R2 桶未绑定", { status: 500 });
 
   const object = await bucket.get(`${params.slug}.json`);
-  
-  if (!object) {
-    throw new Response("Post not found", { status: 404 });
-  }
+  if (!object) throw new Response("文章未找到", { status: 404 });
 
   const rawText = await object.text();
-  return JSON.parse(rawText);
+
+  // 🔥 极其优雅的单行调用：扔给中心 C，闭眼拿标准数据！
+  // (这里为了演示，暂时假设密码是硬编码或从 cookie 取的)
+  const password = "my_master_password"; 
+  const standardAST = await universalTransformer(rawText, password);
+
+  return standardAST;
 }
 
-function renderBlock(block: any) {
-  switch (block.type) {
-    case "paragraph": return <p key={block.id} className="ast-paragraph">{block.content}</p>;
-    case "heading": return <h2 key={block.id} className="ast-heading-2">{block.content}</h2>;
-    case "quote": return <blockquote key={block.id} className="ast-quote">{block.content}</blockquote>;
-    default: return <div key={block.id} style={{ color: 'red' }}>[未知区块]</div>;
-  }
-}
-
+// ... 下面是组件渲染代码，完全不用改 ...
 export default function PostReader() {
-  const { slug } = useParams(); 
   const post = useLoaderData<any>(); 
-
-  return (
-    <>
-      <CommandPalette />
-      <div className="reader-container">
-        <Link to="/" style={{ display: 'inline-block', marginBottom: '3rem', color: 'var(--text-muted)', textDecoration: 'none', fontFamily: 'monospace' }}>
-          ← Back
-        </Link>
-        <header className="reader-header">
-          <h1 className="reader-title">{post.metadata?.title || "无标题"}</h1>
-          <div className="reader-meta">{post.metadata?.date || "未知日期"} / {slug}</div>
-        </header>
-        <article className="reader-body">
-          {post.blocks?.map((block: any) => renderBlock(block))}
-        </article>
-      </div>
-    </>
-  );
+  // 依然舒舒服服地读取 post.metadata.title 和 post.blocks
 }
