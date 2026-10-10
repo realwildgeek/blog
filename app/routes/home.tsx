@@ -1,36 +1,34 @@
+// app/routes/home.tsx
 import { useLoaderData } from "react-router";
 import { PostCard } from "../components/PostCard";
 import { CommandPalette } from "../components/CommandPalette";
+import { universalTransformer } from "../adapters/index"; // 引入万能清洗器
 
 export async function loader() {
   const env = (globalThis as any).CF_ENV;
   const bucket = env?.BLOG_BUCKET;
-  
-  if (!bucket) {
-    return { posts: [] };
-  }
+  if (!bucket) return { posts: [] };
 
   try {
     const listed = await bucket.list();
     
     const postsPromises = listed.objects
-      .filter((obj: any) => obj.key.endsWith('.json'))
+      .filter((obj: any) => obj.key.endsWith('.json')) // 👈 统一：只认 .json 结尾的文件
       .map(async (obj: any) => {
         const file = await bucket.get(obj.key);
         if (!file) return null;
         
-        try {
-          const rawText = await file.text();
-          const data = JSON.parse(rawText);
-          
-          return {
-            slug: obj.key.replace('.json', ''),
-            title: data.metadata?.title || "无标题",
-            date: data.metadata?.date || "1970-01-01"
-          };
-        } catch (e) {
-          return null; 
-        }
+        const rawText = await file.text();
+        const slugName = obj.key.replace('.json', '');
+        
+        // 🔥 将脏数据统统扔给中心清洗，它绝对不会报错，一定会返回带有标题的结构
+        const ast = await universalTransformer(rawText, slugName);
+        
+        return {
+          slug: slugName,
+          title: ast.metadata.title,
+          date: ast.metadata.createdAt?.split('T')[0] || "未知日期"
+        };
       });
 
     const posts = await Promise.all(postsPromises);
@@ -46,13 +44,11 @@ export async function loader() {
 }
 
 export default function Home() {
-  // 接住抽水机抽上来的真实文章列表
   const { posts } = useLoaderData<any>();
 
   return (
     <>
       <CommandPalette />
-
       <div className="app-container">
         <header className="header-area">
           <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 600 }}>无名之境</h1>
