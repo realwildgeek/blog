@@ -10,18 +10,34 @@ import { decryptBlockData } from "../adapters/crypto-adapter";
 // ---------------------------------------------------------
 // 💧 纯净抽水机 (运行在 Server 边缘节点)
 // ---------------------------------------------------------
+// app/routes/$slug.tsx
+
 export async function loader({ params }: any) {
   const env = (globalThis as any).CF_ENV;
   const bucket = env?.BLOG_BUCKET;
   if (!bucket) throw new Response("R2 未绑定", { status: 500 });
 
-  // 无后缀拉取，完全拥抱 R2 的 Object 哲学
-  const object = await bucket.get(params.slug);
-  if (!object) throw new Response("文章未找到", { status: 404 });
+  const slug = params.slug;
+  let object = null;
+
+  // 🕵️‍♂️ 智能寻址策略
+
+  // 第一次尝试：直接找完全匹配的名字（匹配你新上传的无后缀 UUID 文件）
+  object = await bucket.get(slug);
+
+  // 第二次尝试：如果没找到，就自动补上 .json 试试看（兼容你早期的 qqq.json 文件）
+  if (!object) {
+    object = await bucket.get(`${slug}.json`);
+  }
+
+  // 终极拦截：如果两次都没找到，说明文件真的不存在，抛出 404
+  if (!object) {
+    throw new Response("文章未找到", { status: 404 });
+  }
 
   const rawText = await object.text();
   
-  // 交给处理中心C洗成标准外壳，然后发给前端（绝不传密码，也不解密）
+  // 交给处理中心 C 清洗
   return await universalTransformer(rawText);
 }
 
