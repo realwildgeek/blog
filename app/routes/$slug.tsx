@@ -108,7 +108,7 @@ export default function PostReader() {
           <header className="reader-header">
             <h1 className="reader-title">{post.metadata.title}</h1>
             <div className="reader-meta">
-              {post.metadata.createdAt.split('T')[0]} 
+              {post.metadata.createdAt ? post.metadata.createdAt.split('T')[0] : "未知日期"}
               {post.type === "crypto5.2" && <span style={{color: "#10b981", marginLeft: "10px"}}>✓ E2EE 解密成功</span>}
             </div>
           </header>
