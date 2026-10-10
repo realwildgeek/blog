@@ -6,6 +6,7 @@ import {
   Scripts,
   ScrollRestoration,
 } from "react-router";
+import { GlobalFeedback } from "./components/Feedback";
 
 import type { Route } from "./+types/root";
 import "./app.css";
@@ -33,6 +34,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
       </head>
       <body>
+        <GlobalFeedback />
         {children}
         <ScrollRestoration />
         <Scripts />

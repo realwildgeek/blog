@@ -1,47 +1,45 @@
 // app/routes/$slug.tsx
-// =========================================================================
-// 📖 前端阅读器 & 解密指挥官
-// =========================================================================
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useLoaderData } from "react-router";
 import { universalTransformer } from "../adapters/index";
 import { decryptBlockData } from "../adapters/crypto-adapter";
 
-// ---------------------------------------------------------
-// 💧 纯净抽水机 (运行在 Server 边缘节点)
-// ---------------------------------------------------------
-// app/routes/$slug.tsx
+// 👉 引入你写的 Feedback 工具，用于调用 API
+import { Feedback } from "../utils/feedback"; 
 
 export async function loader({ params }: any) {
   const env = (globalThis as any).CF_ENV;
   const bucket = env?.BLOG_BUCKET;
-  if (!bucket) throw new Response("R2 未绑定", { status: 500 });
+  if (!bucket) throw new Response("R2 桶未绑定", { status: 500 });
 
-  // 👈 统一：强行带上 .json 后缀去抽水
   const object = await bucket.get(`${params.slug}.json`);
   if (!object) throw new Response("文章未找到", { status: 404 });
 
   const rawText = await object.text();
-  
-  // 传入 params.slug，这样如果文件坏了，占位页面里能显示出文件名
-  return await universalTransformer(rawText, params.slug); 
+  // 服务端只做格式清洗，绝不解密！
+  return await universalTransformer(rawText, params.slug);
 }
 
-// ---------------------------------------------------------
-// 🎨 前端动态交互画布 (运行在 浏览器)
-// ---------------------------------------------------------
 export default function PostReader() {
   const post = useLoaderData<any>();
   
-  // 核心状态机
   const isEncryptedInitial = post.metadata?.access?.e2ee?.isEncrypted;
-  
   const [isLocked, setIsLocked] = useState(isEncryptedInitial);
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<"idle" | "decrypting" | "error">("idle");
   const [decryptedBlocks, setDecryptedBlocks] = useState(isEncryptedInitial ? null : post.blocks);
 
-  // 💥 触发安全解锁
+  useEffect(() => {
+    const locked = post.metadata?.access?.e2ee?.isEncrypted;
+    setIsLocked(locked);
+    setDecryptedBlocks(locked ? null : post.blocks);
+    setPassword("");
+    setStatus("idle");
+
+    // 埋点：向全局 Feedback 发送调试信息
+    Feedback.trace("页面加载: 收到的初始 AST 结构", post);
+  }, [post]);
+
   const handleUnlock = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!password) return;
@@ -49,100 +47,80 @@ export default function PostReader() {
     setStatus("decrypting");
 
     try {
-      // 从服务端传来的包裹中提取关键安全信息
       const wrappedDEK = post.metadata.access.e2ee.wrappedDEK;
-      // 在我们的旧版结构里，content 是一个包裹在数组里的长字符串密文，所以取 [0]
       const ciphertext = Array.isArray(post.blocks) ? post.blocks[0] : post.blocks; 
 
-      // 👉 插上转接头，开始呼叫硬件算力进行零知识解密！
       if (post.type === "crypto5.2") {
          const realBlocks = await decryptBlockData(ciphertext, wrappedDEK, password);
          
-         // 解密成功！替换数据，解除封锁状态
          setDecryptedBlocks(realBlocks);
          setStatus("idle");
          setIsLocked(false);
+         
+         // 触发完美的 UI 提示
+         Feedback.ui("解锁成功！AST 重组完毕", "info");
+         Feedback.trace("解密成功: 明文 Blocks 结构", realBlocks);
       }
     } catch (error) {
       console.error(error);
       setStatus("error");
+      // 触发红色的 UI 错误提示
+      Feedback.ui("密钥错误或 Auth Tag 验证失败", "error");
     }
   };
 
-  // ==========================================
-  // 视图 A：🛡️ 锁定状态 (输入密码的优雅 UI)
-  // ==========================================
-  if (isLocked) {
-    return (
-      <div className="app-container" style={{ textAlign: "center", marginTop: "15vh" }}>
-        <div style={{ fontSize: "4rem", marginBottom: "1rem" }}>🔒</div>
-        <h1 className="reader-title" style={{ letterSpacing: "2px" }}>端到端加密档案</h1>
-        <p style={{ color: "var(--text-muted)", marginBottom: "3rem", fontSize: "0.95rem" }}>
-          数据仍处于加密形态，需验证所有者密钥以在本地释放。
-        </p>
-        
-        <form onSubmit={handleUnlock} style={{ maxWidth: "320px", margin: "0 auto" }}>
-          <input
-            type="password"
-            autoFocus
-            className="cmd-input"
-            style={{ 
-              textAlign: "center", letterSpacing: "0.2em", padding: "1rem", 
-              borderRadius: "8px", border: "1px solid var(--border-subtle)" 
-            }}
-            placeholder="••••••••"
-            value={password}
-            onChange={(e) => { setPassword(e.target.value); setStatus("idle"); }}
-            disabled={status === "decrypting"}
-          />
-          
-          <div style={{ marginTop: "1.5rem", height: "30px", fontSize: "0.85rem" }}>
-            {status === "decrypting" && (
-              <span style={{ color: "#3b82f6", fontFamily: "monospace" }}>
-                [ ⏳ 释放本地算力，重组 AES-GCM 数据区块... ]
-              </span>
-            )}
-            {status === "error" && (
-              <span style={{ color: "#ef4444" }}>❌ Auth Tag 验证失败，密钥拒接访问</span>
-            )}
-          </div>
-        </form>
-      </div>
-    );
-  }
-
-  // ==========================================
-  // 视图 B：📖 解密成功 / 明文直出 渲染视图
-  // ==========================================
+  // 💡 注意这里：删除了 <FeedbackPanel />，因为它已经在 root.tsx 全局挂载了！
   return (
-    <div className="reader-container">
-      <header className="reader-header">
-        <h1 className="reader-title">{post.metadata.title}</h1>
-        <div className="reader-meta">
-          发布于 {new Date(post.metadata.createdAt).toLocaleDateString()} 
-          {/* 渲染一个极其装杯的安全认证标识 */}
-          {isEncryptedInitial && (
-            <span style={{
-              color: "#059669", background: "#d1fae5", 
-              padding: "2px 8px", borderRadius: "12px", 
-              marginLeft: "12px", fontSize: "0.75rem", fontWeight: 600
-            }}>
-              ✓ E2EE Verified
-            </span>
-          )}
+    <>
+      {/* ==========================================
+          🎨 视图 1：锁定状态 (密码框 UI)
+          ========================================== */}
+      {isLocked ? (
+        <div className="app-container" style={{ textAlign: "center", marginTop: "15vh" }}>
+          <div style={{ fontSize: "4rem", marginBottom: "1rem" }}>🔒</div>
+          <h1 className="reader-title" style={{ letterSpacing: "2px" }}>端到端加密档案</h1>
+          <p style={{ color: "var(--text-muted)", marginBottom: "3rem" }}>
+            数据处于加密形态，需验证所有者密钥以在本地释放。
+          </p>
+          
+          <form onSubmit={handleUnlock} style={{ maxWidth: "300px", margin: "0 auto" }}>
+            <input
+              type="password"
+              autoFocus
+              className="cmd-input"
+              style={{ textAlign: "center", letterSpacing: "0.2em", padding: "1rem" }}
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); setStatus("idle"); }}
+              disabled={status === "decrypting"}
+            />
+            <div style={{ marginTop: "1.5rem", height: "30px", fontSize: "0.85rem" }}>
+              {status === "decrypting" && <span style={{ color: "#3b82f6" }}>[ 重组 AES-GCM 数据... ]</span>}
+              {status === "error" && <span style={{ color: "#ef4444" }}>❌ Auth Tag 验证失败</span>}
+            </div>
+          </form>
         </div>
-      </header>
+      ) : (
+        /* ==========================================
+           🎨 视图 2/3：明文渲染区
+           ========================================== */
+        <div className="reader-container">
+          <header className="reader-header">
+            <h1 className="reader-title">{post.metadata.title}</h1>
+            <div className="reader-meta">
+              {post.metadata.createdAt.split('T')[0]} 
+              {post.type === "crypto5.2" && <span style={{color: "#10b981", marginLeft: "10px"}}>✓ E2EE 解密成功</span>}
+            </div>
+          </header>
 
-      <article style={{ marginTop: "3rem" }}>
-        {/* 解析出的纯净 Blocks 数据渲染区 */}
-        {decryptedBlocks && decryptedBlocks.map((block: any, idx: number) => {
-          // 这里可以根据 block.type 扩展出 heading, quote 等，目前统配 paragraph
-          const textContent = typeof block === 'string' ? block : (block.content || '');
-          return (
-             <p key={idx} className="ast-paragraph">{textContent}</p>
-          );
-        })}
-      </article>
-    </div>
+          <article>
+            {decryptedBlocks && decryptedBlocks.map((block: any, idx: number) => {
+              const textContent = typeof block === 'string' ? block : (block.content || JSON.stringify(block));
+              return <p key={idx} className="ast-paragraph">{textContent}</p>;
+            })}
+          </article>
+        </div>
+      )}
+    </>
   );
 }
