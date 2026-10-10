@@ -1,148 +1,107 @@
-// app/routes/$slug.tsx
+// app/adapters/index.ts
 // =========================================================================
-// 📖 前端阅读器 & 解密指挥官
+// 🏢 核心调度中心 (处理中心 C) - 满级兼容与 X光透视版
 // =========================================================================
-import { useState } from "react";
-import { useParams, useLoaderData } from "react-router";
-import { universalTransformer } from "../adapters/index";
-import { decryptBlockData } from "../adapters/crypto-adapter";
 
-// ---------------------------------------------------------
-// 💧 纯净抽水机 (运行在 Server 边缘节点)
-// ---------------------------------------------------------
-// app/routes/$slug.tsx
-
-export async function loader({ params }: any) {
-  const env = (globalThis as any).CF_ENV;
-  const bucket = env?.BLOG_BUCKET;
-  if (!bucket) throw new Response("R2 未绑定", { status: 500 });
-
-  // 👈 统一：强行带上 .json 后缀去抽水
-  const object = await bucket.get(`${params.slug}.json`);
-  if (!object) throw new Response("文章未找到", { status: 404 });
-
-  const rawText = await object.text();
-  
-  // 传入 params.slug，这样如果文件坏了，占位页面里能显示出文件名
-  return await universalTransformer(rawText, params.slug); 
-}
-
-// ---------------------------------------------------------
-// 🎨 前端动态交互画布 (运行在 浏览器)
-// ---------------------------------------------------------
-export default function PostReader() {
-  const post = useLoaderData<any>();
-  
-  // 核心状态机
-  const isEncryptedInitial = post.metadata?.access?.e2ee?.isEncrypted;
-  
-  const [isLocked, setIsLocked] = useState(isEncryptedInitial);
-  const [password, setPassword] = useState("");
-  const [status, setStatus] = useState<"idle" | "decrypting" | "error">("idle");
-  const [decryptedBlocks, setDecryptedBlocks] = useState(isEncryptedInitial ? null : post.blocks);
-
-  // 💥 触发安全解锁
-  const handleUnlock = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!password) return;
-    
-    setStatus("decrypting");
-
-    try {
-      // 从服务端传来的包裹中提取关键安全信息
-      const wrappedDEK = post.metadata.access.e2ee.wrappedDEK;
-      // 在我们的旧版结构里，content 是一个包裹在数组里的长字符串密文，所以取 [0]
-      const ciphertext = Array.isArray(post.blocks) ? post.blocks[0] : post.blocks; 
-
-      // 👉 插上转接头，开始呼叫硬件算力进行零知识解密！
-      if (post.type === "crypto5.2") {
-         const realBlocks = await decryptBlockData(ciphertext, wrappedDEK, password);
-         
-         // 解密成功！替换数据，解除封锁状态
-         setDecryptedBlocks(realBlocks);
-         setStatus("idle");
-         setIsLocked(false);
-      }
-    } catch (error) {
-      console.error(error);
-      setStatus("error");
-    }
-  };
-
-  // ==========================================
-  // 视图 A：🛡️ 锁定状态 (输入密码的优雅 UI)
-  // ==========================================
-  if (isLocked) {
-    return (
-      <div className="app-container" style={{ textAlign: "center", marginTop: "15vh" }}>
-        <div style={{ fontSize: "4rem", marginBottom: "1rem" }}>🔒</div>
-        <h1 className="reader-title" style={{ letterSpacing: "2px" }}>端到端加密档案</h1>
-        <p style={{ color: "var(--text-muted)", marginBottom: "3rem", fontSize: "0.95rem" }}>
-          数据仍处于加密形态，需验证所有者密钥以在本地释放。
-        </p>
-        
-        <form onSubmit={handleUnlock} style={{ maxWidth: "320px", margin: "0 auto" }}>
-          <input
-            type="password"
-            autoFocus
-            className="cmd-input"
-            style={{ 
-              textAlign: "center", letterSpacing: "0.2em", padding: "1rem", 
-              borderRadius: "8px", border: "1px solid var(--border-subtle)" 
-            }}
-            placeholder="••••••••"
-            value={password}
-            onChange={(e) => { setPassword(e.target.value); setStatus("idle"); }}
-            disabled={status === "decrypting"}
-          />
-          
-          <div style={{ marginTop: "1.5rem", height: "30px", fontSize: "0.85rem" }}>
-            {status === "decrypting" && (
-              <span style={{ color: "#3b82f6", fontFamily: "monospace" }}>
-                [ ⏳ 释放本地算力，重组 AES-GCM 数据区块... ]
-              </span>
-            )}
-            {status === "error" && (
-              <span style={{ color: "#ef4444" }}>❌ Auth Tag 验证失败，密钥拒接访问</span>
-            )}
-          </div>
-        </form>
-      </div>
-    );
+export async function universalTransformer(rawText: string, fallbackSlug: string = "unknown"): Promise<any> {
+  let rawData: any;
+  try {
+    rawData = JSON.parse(rawText);
+  } catch (e) {
+    return getUnsupportedAST(fallbackSlug, "无法解析为有效 JSON (JSON.parse 失败)，可能是纯文本或编码损坏");
   }
 
-  // ==========================================
-  // 视图 B：📖 解密成功 / 明文直出 渲染视图
-  // ==========================================
-  return (
-    <div className="reader-container">
-      <header className="reader-header">
-        <h1 className="reader-title">{post.metadata.title}</h1>
-        <div className="reader-meta">
-          发布于 {new Date(post.metadata.createdAt).toLocaleDateString()} 
-          {/* 渲染一个极其装杯的安全认证标识 */}
-          {isEncryptedInitial && (
-            <span style={{
-              color: "#059669", background: "#d1fae5", 
-              padding: "2px 8px", borderRadius: "12px", 
-              marginLeft: "12px", fontSize: "0.75rem", fontWeight: 600
-            }}>
-              ✓ E2EE Verified
-            </span>
-          )}
-        </div>
-      </header>
+  // ---------------------------------------------------------
+  // 🔍 嗅探规则 1: 加密数据包 (只要有信封密钥 wrappedDEK，统统按加密处理)
+  // 兼容旧版 meta.wrappedDEK 与 新版 metadata.access.e2ee.wrappedDEK
+  // ---------------------------------------------------------
+  const wrappedDEK = rawData.meta?.wrappedDEK || rawData.metadata?.access?.e2ee?.wrappedDEK || rawData.wrappedDEK;
+  
+  if (wrappedDEK) {
+    return {
+      version: "1.1.0",
+      type: "crypto5.2", // 呼叫解密插头
+      metadata: {
+        title: rawData.meta?.title || rawData.metadata?.title || "🔒 私密加密文档",
+        slug: rawData.meta?.id || rawData.metadata?.slug || fallbackSlug,
+        createdAt: rawData.meta?.createdAt || rawData.metadata?.createdAt || new Date().toISOString(),
+        access: {
+          visibility: "private",
+          e2ee: { isEncrypted: true, wrappedDEK }
+        }
+      },
+      // 容错：不管是 content 还是 blocks，把密文数组塞进去
+      blocks: rawData.content || rawData.blocks || [] 
+    };
+  }
 
-      <article style={{ marginTop: "3rem" }}>
-        {/* 解析出的纯净 Blocks 数据渲染区 */}
-        {decryptedBlocks && decryptedBlocks.map((block: any, idx: number) => {
-          // 这里可以根据 block.type 扩展出 heading, quote 等，目前统配 paragraph
-          const textContent = typeof block === 'string' ? block : (block.content || '');
-          return (
-             <p key={idx} className="ast-paragraph">{textContent}</p>
-          );
-        })}
-      </article>
-    </div>
-  );
+  // ---------------------------------------------------------
+  // 🔍 嗅探规则 2: 标准 1.1.0 AST (自带 metadata 和 blocks)
+  // ---------------------------------------------------------
+  if (rawData.metadata && rawData.blocks) {
+    return { 
+      ...rawData, 
+      version: rawData.version || "1.1.0",
+      type: "native" // 原生支持，直接渲染
+    };
+  }
+
+  // ---------------------------------------------------------
+  // 🔍 嗅探规则 3: 旧版明文包 (比如 qqq.json，有 meta 和 content，但没加密)
+  // ---------------------------------------------------------
+  if (rawData.meta && rawData.content) {
+    return {
+      version: "1.1.0",
+      type: "native", 
+      metadata: {
+        title: rawData.meta.title || "旧版明文文档",
+        slug: rawData.meta.id || fallbackSlug,
+        createdAt: rawData.meta.createdAt || rawData.meta.updatedAt || new Date().toISOString(),
+        access: { visibility: "public" }
+      },
+      blocks: rawData.content // 自动平移为 blocks
+    };
+  }
+
+  // ---------------------------------------------------------
+  // 🔍 嗅探规则 4: 极简草稿 (只有 title 和 content)
+  // ---------------------------------------------------------
+  if (rawData.title && (rawData.content || rawData.body)) {
+    return {
+      version: "1.1.0",
+      type: "native",
+      metadata: { 
+        title: rawData.title, 
+        createdAt: rawData.date || rawData.createdAt || new Date().toISOString() 
+      },
+      blocks: Array.isArray(rawData.content) ? rawData.content : [{ type: "paragraph", content: rawData.content || rawData.body }]
+    };
+  }
+
+  // ---------------------------------------------------------
+  // 🚨 兜底防线: 开天眼！打印出这个未知 JSON 到底包含什么字段
+  // ---------------------------------------------------------
+  const keys = Object.keys(rawData).join(", ");
+  return getUnsupportedAST(fallbackSlug, `文件包含的顶层字段为: [ ${keys} ]`);
+}
+
+/**
+ * 诊断占位符 (Fallback UI AST)
+ */
+function getUnsupportedAST(slugName: string, debugInfo: string) {
+  return {
+    version: "1.1.0",
+    type: "unsupported",
+    metadata: {
+      title: "⚠️ 暂时无法适配，请联系管理员",
+      slug: slugName,
+      createdAt: new Date().toISOString(),
+      access: { visibility: "public" }
+    },
+    blocks: [
+      { type: "paragraph", content: `文件名 / 标识符: ${slugName}.json` },
+      { type: "paragraph", content: `【诊断雷达】: ${debugInfo}` }, // 👈 这一行将直接在网页上告诉你格式差在哪里！
+      { type: "paragraph", content: "系统当前未匹配到对应的解析插头，请检查 R2 桶中的源文件格式。" }
+    ]
+  };
 }
